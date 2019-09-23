@@ -2,6 +2,7 @@ let w = 0, h = 0;
 const ballImage = new Image();
 
 let balls = [];
+let restitution = 0.75;
 
 function fixSize() {
     w = window.innerWidth;
@@ -12,6 +13,7 @@ function fixSize() {
 }
 
 let lastTimestamp = 0, fps = 0, fpsTimestamp = -1, frames = 0;
+let mousePosition = {x: 0, y: 0}, leftMouseDown = false, rightMouseDown = false;
 
 function processFrameRate(timestamp) {
 
@@ -42,13 +44,40 @@ function pageLoad() {
     for (let i = 0; i < 100; i++) {
         let x = Math.random() * w;
         let y = Math.random() * h;
-        let dx = Math.random() * 100 - 50;
-        let dy = Math.random() * 100 - 50;
-        let r = Math.random() * 20 + 20;
+        let dx = Math.random() * 1000 - 500;
+        let dy = Math.random() * 1000 - 500;
+        let r = Math.random() * 30 + 10;
         balls.push({x, y, dx, dy, r});
     }
 
     window.requestAnimationFrame(redraw);
+
+    const canvas = document.getElementById('ballCanvas');
+
+    canvas.addEventListener('mousemove', event => {
+        mousePosition.x = event.clientX;
+        mousePosition.y = event.clientY;
+    }, false);
+
+    canvas.addEventListener('mousedown', event => {
+        if (event.button === 0) {
+            leftMouseDown = true;
+        } else {
+            rightMouseDown = true;
+        }
+    }, false);
+
+    canvas.addEventListener('mouseup', event => {
+        if (event.button === 0) {
+            leftMouseDown = false;
+        } else {
+            rightMouseDown = false;
+        }
+    }, false);
+
+    canvas.oncontextmenu = function (e) {
+        e.preventDefault();
+    };
 
 }
 
@@ -62,66 +91,79 @@ function redraw(timestamp) {
 
     const frameLength = processFrameRate(timestamp)
 
-    //console.log(frameLength);
+    let attraction = 0;
+    if (leftMouseDown) {
+        attraction = 10;
+    } else if (rightMouseDown) {
+        attraction = -10;
+    } else {
+        attraction = 0;
+    }
 
     for (let ball of balls) {
+
+        let dSquared = Math.sqrt(Math.pow(ball.x - mousePosition.x, 2) + Math.pow(ball.y - mousePosition.y, 2));
+
+        ball.dx += attraction * (ball.x - mousePosition.x) / dSquared;
+        ball.dy += attraction * (ball.y - mousePosition.y) / dSquared;
 
         ball.x += ball.dx * frameLength;
         ball.y += ball.dy * frameLength;
 
-        if (ball.x < ball.r && ball.dx < 0) ball.dx = -ball.dx;
-        if (ball.y < ball.r && ball.dy < 0) ball.dy = -ball.dy;
-        if (ball.x > w-ball.r && ball.dx > 0) ball.dx = -ball.dx;
-        if (ball.y > h-ball.r && ball.dy > 0) ball.dy = -ball.dy;
+        if (ball.x < ball.r && ball.dx < 0) {
+            ball.x = ball.r;
+            ball.dx = -ball.dx*restitution;
+        }
+        if (ball.y < ball.r && ball.dy < 0) {
+            ball.y = ball.r;
+            ball.dy = -ball.dy*restitution;
+        }
+        if (ball.x > w-ball.r && ball.dx > 0) {
+            ball.x = w-ball.r;
+            ball.dx = -ball.dx*restitution;
+        }
+        if (ball.y > h-ball.r && ball.dy > 0) {
+            ball.y = h-ball.r;
+            ball.dy = -ball.dy*restitution;
+        }
 
     }
 
     for (let i = 1; i < balls.length; i++) {
         for (let j = 0; j < i; j++) {
 
-            let nextSeperation = Math.sqrt(Math.pow(balls[i].x + balls[i].dx * frameLength - balls[j].x - balls[j].dx * frameLength, 2)
-                                     + Math.pow(balls[i].y + balls[i].dy * frameLength - balls[j].y - balls[j].dy * frameLength, 2));
+            let seperation = Math.sqrt(Math.pow(balls[i].x - balls[j].x, 2) + Math.pow(balls[i].y - balls[j].y, 2));
+            let overlap = balls[i].r + balls[j].r - seperation;
 
-            let seperation = Math.sqrt(Math.pow(balls[i].x - balls[j].x, 2)
-                                     + Math.pow(balls[i].y - balls[j].y, 2));
-
-            if (seperation < balls[i].r + balls[j].r) {
-
-                let unitX = (balls[i].x - balls[j].x) / seperation;
-                let unitY = (balls[i].y - balls[j].y) / seperation;
-
-                balls[i].x += unitX;
-                balls[i].y += unitY;
-                balls[j].x -= unitX;
-                balls[j].y -= unitY;
-
-            } else if (nextSeperation < balls[i].r + balls[j].r) {
-
-                let collisionPointX = ((balls[i].x * balls[j].r) + (balls[j].x * balls[i].r)) / (balls[i].r + balls[j].r);
-                let collisionPointY = ((balls[i].y * balls[j].r) + (balls[j].y * balls[i].r)) / (balls[i].r + balls[j].r);
+            if (overlap > 0) {
 
                 let mass1 = Math.pow(balls[i].r, 2);
                 let mass2 = Math.pow(balls[j].r, 2);
 
-                let newVelX1 = (balls[i].dx * (mass1 - mass2) + (2 * mass2 * balls[j].dx)) / (mass1 + mass2);
-                let newVelY1 = (balls[i].dy * (mass1 - mass2) + (2 * mass2 * balls[j].dy)) / (mass1 + mass2);
-                let newVelX2 = (balls[j].dx * (mass2 - mass1) + (2 * mass1 * balls[i].dx)) / (mass1 + mass2);
-                let newVelY2 = (balls[j].dy * (mass2 - mass1) + (2 * mass1 * balls[i].dy)) / (mass1 + mass2);
+                let v1 = Math.sqrt(Math.pow(balls[i].dx, 2) + Math.pow(balls[i].dy, 2));
+                let v2 = Math.sqrt(Math.pow(balls[j].dx, 2) + Math.pow(balls[j].dy, 2));
 
-                balls[i].dx = newVelX1;
-                balls[i].dy = newVelY1;
-                balls[j].dx = newVelX2;
-                balls[j].dy = newVelY2;
+                let unitX = (balls[i].x - balls[j].x) / seperation;
+                let unitY = (balls[i].y - balls[j].y) / seperation;
+
+                let momentum = v1 * mass1 + v2 + mass2;
+
+                balls[i].x += unitX * overlap * mass2 / (mass1 + mass2);
+                balls[i].y += unitY * overlap * mass2 / (mass1 + mass2);
+                balls[j].x -= unitX * overlap * mass1 / (mass1 + mass2);
+                balls[j].y -= unitY * overlap * mass1 / (mass1 + mass2);
+                balls[i].dx = restitution * unitX * momentum / mass1;
+                balls[i].dy = restitution * unitY * momentum / mass1;
+                balls[j].dx = restitution * -unitX * momentum / mass2;
+                balls[j].dy = restitution * -unitY * momentum / mass2;
 
             }
         }
     }
 
+
     for (let ball of balls) {
-        context.drawImage(ballImage, 0,0, ballImage.width, ballImage.height, ball.x-ball.r, ball.y-ball.r, ball.r*2, ball.r*2);
-        //context.font = "12px Arial";
-        //context.fillStyle = 'white';
-        //context.fillText(`(${ball.dx}, ${ball.dy})`, ball.x+ball.r, ball.y+ball.r);
+        context.drawImage(ballImage, 0,0, ballImage.width, ballImage.height, ball.x-ball.r, ball.y-ball.r, ball.r*2, ball.r*2);        
     }
 
     window.requestAnimationFrame(redraw);
