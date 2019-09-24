@@ -72,7 +72,7 @@ function redraw(timestamp) {
     const frameLength = (timestamp - lastTimestamp) / 1000;
     lastTimestamp = timestamp;
 
-    function seperation(b1, b2) {
+    function separation(b1, b2) {
         return Math.sqrt(Math.pow(b1.x - b2.x, 2) + Math.pow(b1.y - b2.y, 2));
     }
 
